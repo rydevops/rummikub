@@ -21,6 +21,7 @@
     turn: null,
     fresh: new Set(),      // tiles just played by someone (glow)
     drawn: null,           // tile the human just drew
+    origins: new Map(),    // id -> {p:{x,y}, delay}: where a newly appeared tile flies in from
     thinking: -1,
     log: [],
     status: '',
@@ -50,7 +51,7 @@
     if (o.static) cls.push('static');
     const label = RK.isJoker(id) ? 'joker' : `${COLOR_NAMES[RK.colorOf(id)]} ${n}`;
     const tag = o.static ? 'div' : 'button';
-    return `<${tag} class="${cls.join(' ')}" ${o.static ? '' : `data-tile="${id}"`} aria-label="${label}"><span class="n">${n}</span><span class="s">${s}</span></${tag}>`;
+    return `<${tag} class="${cls.join(' ')}" data-id="${id}" ${o.static ? '' : `data-tile="${id}"`} aria-label="${label}"><span class="n">${n}</span><span class="s">${s}</span></${tag}>`;
   }
   const mt = (c, v) => tileHtml(c * 13 + v - 1, { static: true });
   const mj = (val) => tileHtml(104, { static: true, jokerValue: val });
@@ -118,7 +119,7 @@
   }
 
   function controlsHtml() {
-    if (!ui.humanTurn) return '<div class="actions"><span class="grow" style="color:var(--muted)">Waiting for your turn…</span></div>';
+    if (!ui.humanTurn) return '<div class="actions"><button class="btn small ghost" data-act="sort" aria-label="Sort rack">Sort</button><span class="grow" style="color:var(--muted);text-align:right">Waiting for your turn…</span></div>';
     const sel = ui.selected.size;
     const t = ui.turn;
     const changed = t.history.length > 0;
@@ -135,8 +136,59 @@
       <button class="btn small primary" data-act="end">End turn</button></div>`;
   }
 
+  /* ---- animation: FLIP for tiles that moved, fly-in for tiles that appeared ---- */
+  const reduceMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const centerOf = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+  function tilePositions() {
+    const m = new Map();
+    document.querySelectorAll('#app .tile[data-id]').forEach((el) => m.set(el.dataset.id, el.getBoundingClientRect()));
+    return m;
+  }
+  function flyIn(el, from, delay) {
+    const r = el.getBoundingClientRect();
+    const dx = from.x - (r.left + r.width / 2);
+    const dy = from.y - (r.top + r.height / 2);
+    el.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(.4) rotate(-12deg)`, opacity: 0 },
+      { opacity: 1, offset: 0.25 },
+      { transform: 'translate(0, 0) scale(1) rotate(0)', opacity: 1 },
+    ], { duration: 520, delay: delay || 0, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
+  }
+  function flyGhost(from, to) {
+    if (!from || !to || reduceMotion()) return;
+    const g = document.createElement('div');
+    g.className = 'tile back ghost';
+    g.style.cssText = `position:fixed;left:${from.x - 20}px;top:${from.y - 27}px;z-index:15;pointer-events:none`;
+    document.body.appendChild(g);
+    const a = g.animate([
+      { transform: 'translate(0,0) scale(1)', opacity: 1 },
+      { transform: `translate(${to.x - from.x}px, ${to.y - from.y}px) scale(.5)`, opacity: .2 },
+    ], { duration: 650, easing: 'ease-in-out' });
+    a.onfinish = () => g.remove();
+  }
+  function animateAfterRender(prev) {
+    if (reduceMotion()) { ui.origins.clear(); return; }
+    document.querySelectorAll('#app .tile[data-id]').forEach((el) => {
+      const id = el.dataset.id;
+      const old = prev && prev.get(id);
+      if (old) {
+        const r = el.getBoundingClientRect();
+        const dx = old.left - r.left; const dy = old.top - r.top;
+        if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+          el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
+            { duration: 380, easing: 'cubic-bezier(.2,.8,.2,1)' });
+        }
+      } else if (ui.origins.has(+id)) {
+        const o = ui.origins.get(+id);
+        flyIn(el, o.p, o.delay);
+      }
+    });
+    ui.origins.clear();
+  }
+
   function render() {
     const app = $('#app');
+    const prev = ui.screen === 'game' ? tilePositions() : null;
     const keep = { t: 0, r: 0 };
     const tw = app.querySelector('.tablewrap'); const rk = app.querySelector('.rack');
     if (tw) keep.t = tw.scrollTop;
@@ -170,6 +222,7 @@
     const tw2 = app.querySelector('.tablewrap'); const rk2 = app.querySelector('.rack');
     if (tw2) tw2.scrollTop = keep.t;
     if (rk2) rk2.scrollTop = keep.r;
+    animateAfterRender(prev);
   }
 
   /* ------------------------------------------------------------------ toast / modal */
@@ -279,6 +332,7 @@
     const id = RK.drawOrPass(game, 0);
     ui.fresh = new Set();
     ui.drawn = id;
+    if (id !== null) ui.origins.set(id, { p: centerOf($('.pool')) || { x: 0, y: 0 }, delay: 0 });
     say(id === null ? 'You passed (no tiles left to draw).' : 'You drew a tile.', true);
     finishHumanTurn();
   }
@@ -301,6 +355,8 @@
       if (res.ok) {
         done = true;
         ui.fresh = new Set(res.played);
+        const chip = centerOf(document.querySelector(`.opps .opp:nth-child(${i})`));
+        if (chip) res.played.forEach((id, k) => ui.origins.set(id, { p: chip, delay: k * 70 }));
         const newKeys = new Set(game.table.map(RK.setKey));
         const rearranged = oldKeys.some((k) => !newKeys.has(k));
         say(`${p.name} played ${res.played.length} tile${res.played.length === 1 ? '' : 's'}${wasMelded ? '' : ' (first meld!)'}${rearranged ? ' and rearranged the table' : ''}.`, true);
@@ -309,6 +365,7 @@
     if (!done) {
       const id = RK.drawOrPass(game, i);
       ui.fresh = new Set();
+      if (id !== null) flyGhost(centerOf($('.pool')), centerOf(document.querySelector(`.opps .opp:nth-child(${i})`)));
       say(id === null ? `${p.name} passed.` : `${p.name} drew a tile.`, true);
     }
     ui.drawn = null;
@@ -345,6 +402,10 @@
     if (!log) say(`${game.players[game.current].name === 'You' ? 'You go' : game.players[game.current].name + ' goes'} first. Everyone starts with ${RK.HAND_SIZE} tiles.`, true);
     else say(ui.log[ui.log.length - 1] || 'Welcome back!');
     render();
+    if (!log && !reduceMotion()) {
+      const from = centerOf($('.pool'));
+      if (from) document.querySelectorAll('.rack .tile').forEach((el, k) => flyIn(el, from, k * 45));
+    }
     loop(ui.token);
   }
 
