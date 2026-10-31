@@ -416,15 +416,19 @@
     ui.humanTurn = false;
     render();
     const w = game.winner;
-    const rows = game.players.map((p, i) => ({ p, i, pts: RK.rackPoints(p.rack) }));
-    const bonus = rows.reduce((s, r) => s + (r.i === w ? 0 : r.pts), 0);
+    const rows = RK.standings(game).map((r) => Object.assign({ p: game.players[r.idx], i: r.idx }, r));
+    const bonus = rows.reduce((sum, r) => sum + (r.i === w ? 0 : r.pts), 0);
     const score = (r) => (r.i === w ? bonus : -r.pts);
+    const medal = (n) => ['🥇', '🥈', '🥉'][n - 1] || `${n}th`;
+    const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 >> 3) ^ 1 && n % 10 < 4 ? n % 10 : 0]);
+    const mine = rows.find((r) => r.i === 0);
     const stalemate = game.pool.length === 0 && game.players[w].rack.length > 0;
     const head = w === 0 ? '🎉 You win!' : `${game.players[w].avatar} ${game.players[w].name} wins`;
+    const place = `You placed ${ordinal(mine.place)}.`;
     const sub = stalemate ? 'Nobody could move and the pool ran dry — the lowest rack takes it.' : (w === 0 ? 'You emptied your rack first.' : `${game.players[w].name} emptied their rack first.`);
-    openModal(`<h2>${head}</h2><p>${sub}</p>
-      <table class="scoretable"><tr><th>Player</th><th>Tiles left</th><th>Score</th></tr>
-      ${rows.map((r) => `<tr class="${r.i === w ? 'win' : ''}"><td>${r.p.avatar} ${r.p.name}</td><td>${r.p.rack.length} (${r.pts} pts)</td><td>${score(r) > 0 ? '+' : ''}${score(r)}</td></tr>`).join('')}</table>
+    openModal(`<h2>${head}</h2><p>${sub}${w === 0 ? '' : ' ' + place}</p>
+      <table class="scoretable"><tr><th>Place</th><th>Player</th><th>Tiles left</th><th>Score</th></tr>
+      ${rows.map((r) => `<tr class="${r.i === w ? 'win' : ''} ${r.i === 0 ? 'me' : ''}"><td>${medal(r.place)}</td><td>${r.p.avatar} ${r.p.name}</td><td>${r.p.rack.length} (${r.pts} pts)</td><td>${score(r) > 0 ? '+' : ''}${score(r)}</td></tr>`).join('')}</table>
       <div class="row"><button class="btn primary grow" data-act="again">Play again</button><button class="btn ghost grow" data-act="tomenu">Menu</button></div>`);
   }
 

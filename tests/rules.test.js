@@ -83,4 +83,15 @@ assert.strictEqual(g.players.filter((p) => p.human).length, 1);
 g.players.forEach((p) => assert.strictEqual(p.rack.length, 14));
 assert.strictEqual(g.pool.length, 106 - 70);
 assert.strictEqual(new Set(g.players.flatMap((p) => p.rack).concat(g.pool)).size, 106);
+// ---- standings ----
+const sg = RK.newGame(7);
+sg.over = true; sg.winner = 2;
+sg.players[0].rack = [T(0, 5), T(0, 6)];          // 11 pts, 2 tiles
+sg.players[1].rack = [T(0, 3), T(1, 3), T(2, 3)]; // 9 pts, 3 tiles
+sg.players[2].rack = [];                          // winner
+sg.players[3].rack = [T(0, 4), T(1, 7)];          // 11 pts, 2 tiles -> ties with player 0
+sg.players[4].rack = [J1];                        // 30 pts
+const st2 = RK.standings(sg);
+assert.deepStrictEqual(st2.map((r) => r.idx), [2, 1, 0, 3, 4]);
+assert.deepStrictEqual(st2.map((r) => r.place), [1, 2, 3, 3, 5]);
 console.log('rules tests passed');
