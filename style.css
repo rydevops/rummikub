@@ -135,3 +135,6 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 
 .tile.back { background: repeating-linear-gradient(45deg, #2b6f9e 0 6px, #245d85 6px 12px); box-shadow: 0 2px 0 #173f5a, 0 3px 6px rgba(0,0,0,.5); width: 40px; height: 54px; }
 .tile.back > * { display: none; }
+.scoretable tr.me td { background: rgba(255,255,255,.08); }
+.scoretable td:first-child, .scoretable th:first-child { width: 3.2em; text-align: left; }
+.scoretable td:nth-child(3), .scoretable th:nth-child(3) { text-align: left; }
