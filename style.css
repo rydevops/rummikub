@@ -132,3 +132,6 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
   :root { --tw: 34px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.tile.back { background: repeating-linear-gradient(45deg, #2b6f9e 0 6px, #245d85 6px 12px); box-shadow: 0 2px 0 #173f5a, 0 3px 6px rgba(0,0,0,.5); width: 40px; height: 54px; }
+.tile.back > * { display: none; }
