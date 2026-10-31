@@ -241,6 +241,26 @@
     return null;
   }
 
+  /**
+   * Final placings: the winner is 1st, everyone else is ranked by rack value (then tile count).
+   * Players level on both share a place and the next place is skipped (1, 2, 2, 4 ...).
+   */
+  function standings(game) {
+    const rows = game.players.map((p, idx) => ({ idx, pts: rackPoints(p.rack), tiles: p.rack.length }));
+    const win = game.winner;
+    rows.sort((a, b) => {
+      if (a.idx === win) return -1;
+      if (b.idx === win) return 1;
+      return a.pts - b.pts || a.tiles - b.tiles || a.idx - b.idx;
+    });
+    rows.forEach((r, i) => {
+      const prev = rows[i - 1];
+      const tied = i > 1 && prev.pts === r.pts && prev.tiles === r.tiles;
+      r.place = i === 0 ? 1 : tied ? prev.place : i + 1;
+    });
+    return rows;
+  }
+
   function advance(game) {
     game.current = (game.current + 1) % game.players.length;
     game.turns++;
@@ -252,7 +272,7 @@
     mulberry32, shuffle,
     analyze, isValidSet, normalizeSet, setKey, rackPoints,
     validateTurn, meldPoints,
-    newGame, commitMove, drawOrPass, advance,
+    newGame, commitMove, drawOrPass, advance, standings,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RK = api;
